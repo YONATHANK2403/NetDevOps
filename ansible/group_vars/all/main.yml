@@ -1,0 +1,18 @@
+---
+# Variables communes (aucun secret ici : les secrets sont dans vault.yml)
+project_dir: "{{ playbook_dir | dirname | dirname }}"
+compose_cmd: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml
+
+domain: pme.local
+site_title: PME NetDevOps
+
+dmz_net: 172.20.1.0/24
+lan_net: 172.20.2.0/24
+mgmt_net: 172.20.3.0/24
+router_dmz_ip: 172.20.1.1
+router_lan_ip: 172.20.2.1
+router_mgmt_ip: 172.20.3.1
+web_ip: 172.20.1.10
+dns_ip: 172.20.2.10
+monitoring_ip: 172.20.3.10
+dns_upstreams: [1.1.1.1, 9.9.9.9]

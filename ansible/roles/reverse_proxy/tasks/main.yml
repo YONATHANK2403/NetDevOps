@@ -1,0 +1,29 @@
+---
+- name: Créer les dossiers du serveur web
+  ansible.builtin.file:
+    path: "{{ project_dir }}/docker/web-dmz/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: [conf, html, certs]
+
+- name: Générer la configuration Nginx
+  ansible.builtin.template:
+    src: default.conf.j2
+    dest: "{{ project_dir }}/docker/web-dmz/conf/default.conf"
+    mode: "0644"
+  notify: Recharger la configuration des services
+
+- name: Générer la page d'accueil
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ project_dir }}/docker/web-dmz/html/index.html"
+    mode: "0644"
+
+- name: Générer un certificat auto-signé (laboratoire uniquement)
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -newkey rsa:2048 -days 365
+      -subj "/CN=web.{{ domain }}"
+      -keyout {{ project_dir }}/docker/web-dmz/certs/selfsigned.key
+      -out {{ project_dir }}/docker/web-dmz/certs/selfsigned.crt
+    creates: "{{ project_dir }}/docker/web-dmz/certs/selfsigned.crt"

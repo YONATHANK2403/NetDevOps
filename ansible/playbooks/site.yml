@@ -1,0 +1,18 @@
+---
+- name: Déployer l'infrastructure réseau segmentée NetDevOps
+  hosts: netdevops
+  gather_facts: false
+  pre_tasks:
+    - name: Vérifier que les secrets Vault sont définis
+      ansible.builtin.assert:
+        that:
+          - vault_grafana_admin_password is defined
+          - vault_sonar_db_password is defined
+        fail_msg: "Créez ansible/group_vars/all/vault.yml (voir vault.yml.example) et chiffrez-le avec ansible-vault."
+        quiet: true
+      tags: [always]
+  roles:
+    - {role: firewall, tags: [config, firewall]}
+    - {role: dns, tags: [config, dns]}
+    - {role: reverse_proxy, tags: [config, web]}
+    - {role: stack, tags: [deploy]}

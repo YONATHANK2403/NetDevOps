@@ -1,0 +1,6 @@
+---
+# 1) Copiez ce fichier : cp vault.yml.example vault.yml
+# 2) Mettez de vrais mots de passe
+# 3) Chiffrez : ansible-vault encrypt vault.yml
+vault_grafana_admin_password: "CHANGEZ-MOI"
+vault_sonar_db_password: "CHANGEZ-MOI"

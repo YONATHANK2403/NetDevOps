@@ -1,0 +1,9 @@
+---
+# Exécuté une seule fois en fin de playbook, et seulement si une configuration a changé.
+# Ignoré quand on génère uniquement les fichiers (--tags config), sans toucher à Docker.
+- name: Recharger la configuration des services
+  ansible.builtin.command:
+    cmd: "{{ compose_cmd }} restart router-fw web-dmz dns-lan"
+    chdir: "{{ project_dir }}"
+  when: ansible_run_tags | intersect(['deploy', 'all']) | length > 0
+  changed_when: true

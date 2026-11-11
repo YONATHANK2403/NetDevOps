@@ -1,0 +1,16 @@
+# Fichier généré par Ansible (rôle dns) : ne pas modifier à la main.
+listen-address={{ dns_ip }}
+bind-interfaces
+no-resolv
+{% for upstream in dns_upstreams %}
+server={{ upstream }}
+{% endfor %}
+domain-needed
+bogus-priv
+cache-size=500
+log-queries
+local=/{{ domain }}/
+domain={{ domain }}
+host-record=web.{{ domain }},{{ web_ip }}
+host-record=dns.{{ domain }},{{ dns_ip }}
+host-record=monitoring.{{ domain }},{{ monitoring_ip }}

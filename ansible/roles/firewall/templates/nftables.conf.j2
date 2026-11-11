@@ -1,0 +1,49 @@
+#!/usr/sbin/nft -f
+# Fichier généré par Ansible (rôle firewall) : ne pas modifier à la main.
+# Principe : tout est interdit, on n'autorise que les flux utiles.
+flush ruleset
+
+table inet filter {
+    # Trafic à destination du routeur lui-même
+    chain input {
+        type filter hook input priority 0; policy drop;
+        ct state established,related accept
+        iif lo accept
+        ip protocol icmp icmp type echo-request accept
+    }
+
+    # Trafic qui traverse le routeur entre les zones
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+
+        # Internet -> serveur web (après DNAT)
+        ct status dnat ip daddr {{ web_ip }} tcp dport { 80, 443 } accept
+
+        # LAN -> serveur web
+        ip saddr {{ lan_net }} ip daddr {{ web_ip }} tcp dport { 80, 443 } accept
+
+        # Management -> serveur web et DNS (supervision) + ping de diagnostic
+        ip saddr {{ mgmt_net }} ip daddr {{ web_ip }} tcp dport { 80, 443 } accept
+        ip saddr {{ mgmt_net }} ip daddr {{ dns_ip }} meta l4proto { tcp, udp } th dport 53 accept
+        ip saddr {{ mgmt_net }} icmp type echo-request accept
+
+        # Tout le reste est refusé (DMZ -> LAN, LAN -> MGMT, etc.) et journalisé
+        limit rate 5/minute log prefix "nft-drop: "
+        counter drop
+    }
+}
+
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority -100; policy accept;
+        # Ports publiés sur router-fw -> serveur web de la DMZ
+        ip daddr { {{ router_dmz_ip }}, {{ router_lan_ip }}, {{ router_mgmt_ip }} } tcp dport { 80, 443 } dnat to {{ web_ip }}
+    }
+    chain postrouting {
+        type nat hook postrouting priority 100; policy accept;
+        # Les réponses du web doivent repasser par le routeur
+        ct status dnat ip daddr {{ web_ip }} masquerade
+    }
+}

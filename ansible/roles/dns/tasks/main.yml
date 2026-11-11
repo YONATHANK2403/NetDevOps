@@ -1,0 +1,7 @@
+---
+- name: Générer la configuration dnsmasq
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: "{{ project_dir }}/docker/dns-lan/dnsmasq.conf"
+    mode: "0644"
+  notify: Recharger la configuration des services
