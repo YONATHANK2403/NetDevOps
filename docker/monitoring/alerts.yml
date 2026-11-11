@@ -1,0 +1,10 @@
+---
+groups:
+  - name: netdevops
+    rules:
+      - alert: ServiceInaccessible
+        expr: probe_success == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Service inaccessible : {{ $labels.instance }}"
