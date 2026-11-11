@@ -1,0 +1,9 @@
+# Secrets et fichiers générés localement
+.env
+.vault_pass
+ansible/group_vars/all/vault.yml
+docker/web-dmz/certs/
+reports/*
+!reports/.gitkeep
+__pycache__/
+*.retry
