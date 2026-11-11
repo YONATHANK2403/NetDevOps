@@ -1,0 +1,57 @@
+---
+# Outils DevOps : Jenkins + SonarQube (à lancer à part : docker compose -f docker-compose.tools.yml up -d)
+name: netdevops-tools
+
+services:
+  jenkins:
+    build: ./docker/jenkins
+    image: netdevops/jenkins:latest
+    container_name: jenkins
+    restart: unless-stopped
+    user: root   # simplifie l'accès au socket Docker (voir docs/audit-securite.md)
+    environment:
+      # Même chemin sur l'hôte et dans le conteneur : indispensable pour les volumes de docker compose
+      JENKINS_HOME: /srv/jenkins_home
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - /srv/jenkins_home:/srv/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [devops-net]
+
+  sonarqube:
+    image: sonarqube:lts-community
+    container_name: sonarqube
+    restart: unless-stopped
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASSWORD:?définir SONAR_DB_PASSWORD dans .env}
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+    depends_on: [sonar-db]
+    networks: [devops-net]
+
+  sonar-db:
+    image: postgres:16-alpine
+    container_name: sonar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_DB: sonar
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:?définir SONAR_DB_PASSWORD dans .env}
+    volumes:
+      - sonar-db-data:/var/lib/postgresql/data
+    networks: [devops-net]
+
+networks:
+  devops-net:
+    name: devops-net
+
+volumes:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonar-db-data:
