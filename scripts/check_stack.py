@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests de connectivité NetDevOps : DNAT, DNS, règles du pare-feu, supervision."""
 import json
+import os
 import ssl
 import subprocess
 import sys
@@ -10,7 +11,7 @@ import urllib.request
 WEB_IP = "172.20.1.10"
 DNS_IP = "172.20.2.10"
 MGMT_IP = "172.20.3.10"
-PROM_URL = "http://127.0.0.1:9090/api/v1/query?query=probe_success"
+DNAT_HOST = os.environ.get("NETDEVOPS_TEST_HOST", "127.0.0.1")
 
 
 def run(cmd, timeout=15):
@@ -47,13 +48,13 @@ def test_firewall_loaded():
 
 def test_dnat_http():
     """Internet -> router-fw:8080 -> web-dmz (DNAT HTTP)."""
-    status = http_status("http://127.0.0.1:8080/")
+    status = http_status(f"http://{DNAT_HOST}:8080/")
     return status == 200, f"HTTP {status}"
 
 
 def test_dnat_https():
     """Internet -> router-fw:8443 -> web-dmz (DNAT HTTPS)."""
-    status = http_status("https://127.0.0.1:8443/")
+    status = http_status(f"https://{DNAT_HOST}:8443/")
     return status == 200, f"HTTPS {status}"
 
 
@@ -85,19 +86,44 @@ def test_lan_to_mgmt_blocked():
 
 
 def test_monitoring():
-    """Prometheus voit toutes les sondes en succès (ignoré si la supervision est absente)."""
+    """Prometheus voit toutes les sondes en succès (ignoré si absent)."""
+    present, _ = run(["docker", "inspect", "prometheus"], timeout=5)
+    if present != 0:
+        return None, "supervision non déployée"
+
+    query = (
+        "wget -qO- --timeout=5 "
+        "'http://127.0.0.1:9090/api/v1/query?query=probe_success'"
+    )
     deadline = time.time() + 60
+    last_detail = "aucune sonde disponible"
+
     while time.time() < deadline:
+        code, out = docker_exec("prometheus", query, 10)
+        if code != 0:
+            return False, f"API Prometheus inaccessible : {out}"
+
         try:
-            with urllib.request.urlopen(PROM_URL, timeout=5) as resp:  # nosec B310
-                data = json.load(resp)
-        except OSError:
-            return None, "supervision non déployée"
-        values = [r["value"][1] for r in data["data"]["result"]]
-        if values and all(v == "1" for v in values):
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            return False, "réponse Prometheus JSON invalide"
+
+        if data.get("status") != "success":
+            return False, f"API Prometheus en erreur : {data}"
+
+        results = data.get("data", {}).get("result", [])
+        values = [item["value"][1] for item in results]
+
+        if values and all(value == "1" for value in values):
             return True, f"{len(values)} sondes OK"
+
+        if values:
+            failed = sum(value != "1" for value in values)
+            last_detail = f"{failed}/{len(values)} sonde(s) en échec"
+
         time.sleep(5)
-    return False, "des sondes sont en échec"
+
+    return False, f"des sondes sont en échec ({last_detail})"
 
 
 TESTS = [

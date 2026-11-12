@@ -65,10 +65,21 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'vault-pass', variable: 'VAULT_PASS_FILE')]) {
                     sh '''
+                        set -e
                         cd ansible
                         ansible-playbook playbooks/site.yml --vault-password-file "$VAULT_PASS_FILE"
                         cd ..
-                        python3 scripts/check_stack.py | tee reports/tests-connectivite.txt
+                        mkdir -p reports
+                        export NETDEVOPS_TEST_HOST=172.18.0.1
+
+                        if python3 scripts/check_stack.py > reports/tests-connectivite.txt 2>&1; then
+                            test_status=0
+                        else
+                            test_status=$?
+                        fi
+
+                        cat reports/tests-connectivite.txt
+                        exit "$test_status"
                     '''
                 }
             }
