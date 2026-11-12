@@ -60,3 +60,4 @@ Règles du pare-feu : Internet → web (80/443) ; LAN → web ; MGMT → web et 
 - Prometheus et Grafana sont deux conteneurs (et non un seul « monitoring »).
 - Les ports 8080/8443 sont utilisés à la place de 80/443 pour ne pas demander les droits root.
 - Voir `docs/audit-securite.md` pour les points faibles et les corrections.
+# NetDevOps
