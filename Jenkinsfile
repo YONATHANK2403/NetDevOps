@@ -72,12 +72,6 @@ pipeline {
                     '''
                 }
             }
-            post {
-                always {
-                    // Nettoyage de l'environnement de test
-                    sh 'docker compose -f docker-compose.yml down || true'
-                }
-            }
         }
 
         stage('Déploiement prod') {
