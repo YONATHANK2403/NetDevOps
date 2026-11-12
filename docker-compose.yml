@@ -32,7 +32,8 @@ services:
 
   web-dmz:
     <<: *routed
-    image: nginx:stable-alpine
+    build: ./docker/web-dmz
+    image: netdevops/web-dmz:latest
     container_name: web-dmz
     entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec nginx -g 'daemon off;'"]
     environment:
@@ -87,14 +88,13 @@ services:
 
 networks:
   dmz-net:
+    external: true
     name: dmz-net
-    ipam:
-      config: [{subnet: 172.20.1.0/24, gateway: 172.20.1.254}]
+
   lan-net:
+    external: true
     name: lan-net
-    ipam:
-      config: [{subnet: 172.20.2.0/24, gateway: 172.20.2.254}]
+
   mgmt-net:
+    external: true
     name: mgmt-net
-    ipam:
-      config: [{subnet: 172.20.3.0/24, gateway: 172.20.3.254}]

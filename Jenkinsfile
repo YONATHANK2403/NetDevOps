@@ -14,7 +14,7 @@ pipeline {
 
     environment {
         COMPOSE = 'docker compose -f docker-compose.yml -f docker-compose.monitoring.yml'
-        IMAGES  = 'netdevops/router-fw:latest netdevops/dns-lan:latest netdevops/client:latest'
+        IMAGES  = 'netdevops/router-fw:latest netdevops/web-dmz:latest netdevops/dns-lan:latest netdevops/client:latest'
     }
 
     stages {
@@ -74,8 +74,8 @@ pipeline {
             }
             post {
                 always {
-                    // L'environnement de test est démonté : prod et test partagent les mêmes adresses IP
-                    sh '$COMPOSE down || true'
+                    // Nettoyage de l'environnement de test
+                    sh 'docker compose -f docker-compose.yml down || true'
                 }
             }
         }
@@ -96,10 +96,7 @@ pipeline {
             archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
         }
         failure {
-            mail to: 'equipe@pme.local',
-                 subject: "ÉCHEC pipeline ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                 body: "Voir ${env.BUILD_URL}"
-            // Variante Slack : slackSend(channel: '#devops', message: "Échec ${env.BUILD_URL}")
+            echo "ÉCHEC du pipeline : consulter ${env.BUILD_URL}"
         }
     }
 }
