@@ -1,6 +1,6 @@
 #!/bin/sh
-# Charge les règles nftables puis garde le conteneur actif.
+# Charge les règles nftables, puis abandonne les privilèges root.
 set -eu
 nft -f /etc/nftables.conf
 echo "[router-fw] règles nftables chargées"
-exec tail -f /dev/null
+exec su -s /bin/sh -c 'exec tail -f /dev/null' nobody

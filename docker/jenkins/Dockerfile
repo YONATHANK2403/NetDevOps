@@ -41,3 +41,6 @@ RUN curl -fsSLo /tmp/sonar.zip \
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+# Exécution sans privilèges root
+USER jenkins

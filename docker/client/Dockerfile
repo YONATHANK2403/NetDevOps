@@ -5,3 +5,6 @@ RUN apk add --no-cache \
     bind-tools \
     netcat-openbsd \
     iproute2
+
+# Processus applicatif non privilégié par défaut
+USER nobody

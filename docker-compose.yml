@@ -12,7 +12,9 @@ services:
     image: netdevops/router-fw:latest
     container_name: router-fw
     restart: unless-stopped
-    cap_add: [NET_ADMIN]
+    user: "0:0"  # root uniquement pour initialiser nftables
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SETUID, SETGID]
     sysctls:
       - net.ipv4.ip_forward=1
     ports:
@@ -69,7 +71,8 @@ services:
     build: ./docker/client
     image: netdevops/client:latest
     container_name: client-1
-    entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec sleep infinity"]
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec su -s /bin/sh -c 'exec sleep infinity' nobody"]
     environment:
       GW: 172.20.2.1
       ROUTES: "172.20.1.0/24 172.20.3.0/24"
