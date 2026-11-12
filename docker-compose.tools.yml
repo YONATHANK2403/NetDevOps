@@ -11,12 +11,13 @@ services:
     group_add:
       - "973"  # GID du groupe Docker sur l’hôte
     environment:
-      # Données persistantes : /srv/jenkins_home sur l'hôte, monté dans /var/jenkins_home
-      JENKINS_HOME: /var/jenkins_home
+      # Données persistantes : /srv/jenkins_home sur l'hôte et dans Jenkins
+      JENKINS_HOME: /srv/jenkins_home
+      COPY_REFERENCE_FILE_LOG: /srv/jenkins_home/copy_reference_file.log
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
-      - /srv/jenkins_home:/var/jenkins_home
+      - /srv/jenkins_home:/srv/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
     networks: [devops-net]
 
