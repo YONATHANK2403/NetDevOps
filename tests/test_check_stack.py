@@ -133,32 +133,63 @@ class TestConnectivity(unittest.TestCase):
 
 class TestMonitoring(unittest.TestCase):
 
+    @staticmethod
+    def payload(values):
+        return json.dumps({
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"job": job},
+                        "value": [0, value]
+                    }
+                    for job, value in values.items()
+                ]
+            }
+        })
+
     @patch.object(app, "run", return_value=(1, "absent"))
     def test_prometheus_absent(self, mock_run):
         result, detail = app.test_monitoring()
-
         self.assertIsNone(result)
         self.assertEqual(detail, "supervision non déployée")
 
     @patch.object(app, "run", return_value=(0, "présent"))
     @patch.object(app, "docker_exec")
     def test_prometheus_success(self, mock_docker, mock_run):
-        payload = {
-            "status": "success",
-            "data": {
-                "result": [
-                    {"value": [0, "1"]},
-                    {"value": [0, "1"]},
-                    {"value": [0, "1"]}
-                ]
-            }
-        }
-        mock_docker.return_value = (0, json.dumps(payload))
+        mock_docker.return_value = (
+            0,
+            self.payload({
+                "blackbox-dns": "1",
+                "blackbox-http": "1",
+                "blackbox-https": "1",
+            })
+        )
+
+        result, detail = app.test_monitoring()
+        self.assertTrue(result)
+        self.assertEqual(detail, "3 sondes Blackbox OK")
+
+    @patch.object(app.time, "sleep")
+    @patch.object(app.time, "time", side_effect=[0, 0, 61])
+    @patch.object(app, "run", return_value=(0, "présent"))
+    @patch.object(app, "docker_exec")
+    def test_prometheus_missing_probe(
+        self, mock_docker, mock_run, mock_time, mock_sleep
+    ):
+        mock_docker.return_value = (
+            0,
+            self.payload({
+                "blackbox-dns": "1",
+                "blackbox-http": "1",
+            })
+        )
 
         result, detail = app.test_monitoring()
 
-        self.assertTrue(result)
-        self.assertEqual(detail, "3 sondes OK")
+        self.assertFalse(result)
+        self.assertIn("blackbox-https", detail)
+        mock_docker.assert_called()
 
     @patch.object(app, "run", return_value=(0, "présent"))
     @patch.object(app, "docker_exec", return_value=(1, "connexion refusée"))
@@ -186,16 +217,19 @@ class TestMonitoring(unittest.TestCase):
     def test_prometheus_failed_probe(
         self, mock_docker, mock_run, mock_time, mock_sleep
     ):
-        payload = {
-            "status": "success",
-            "data": {"result": [{"value": [0, "0"]}]}
-        }
-        mock_docker.return_value = (0, json.dumps(payload))
+        mock_docker.return_value = (
+            0,
+            self.payload({
+                "blackbox-dns": "1",
+                "blackbox-http": "0",
+                "blackbox-https": "1",
+            })
+        )
 
         result, detail = app.test_monitoring()
 
         self.assertFalse(result)
-        self.assertIn("1/1 sonde(s) en échec", detail)
+        self.assertIn("blackbox-http", detail)
 
     @patch.object(app.time, "sleep")
     @patch.object(app.time, "time", side_effect=[0, 0, 61])
@@ -204,13 +238,17 @@ class TestMonitoring(unittest.TestCase):
     def test_prometheus_empty_results(
         self, mock_docker, mock_run, mock_time, mock_sleep
     ):
-        payload = {"status": "success", "data": {"result": []}}
-        mock_docker.return_value = (0, json.dumps(payload))
+        mock_docker.return_value = (
+            0,
+            self.payload({})
+        )
 
         result, detail = app.test_monitoring()
 
         self.assertFalse(result)
-        self.assertIn("aucune sonde disponible", detail)
+        self.assertIn("blackbox-dns", detail)
+        self.assertIn("blackbox-http", detail)
+        self.assertIn("blackbox-https", detail)
 
 
 class TestMain(unittest.TestCase):

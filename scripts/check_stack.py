@@ -11,6 +11,12 @@ import urllib.request
 WEB_IP = "172.20.1.10"
 DNS_IP = "172.20.2.10"
 MGMT_IP = "172.20.3.10"
+
+EXPECTED_PROBES = {
+    "blackbox-dns",
+    "blackbox-http",
+    "blackbox-https",
+}
 DNAT_HOST = os.environ.get("NETDEVOPS_TEST_HOST", "127.0.0.1")
 
 
@@ -86,7 +92,7 @@ def test_lan_to_mgmt_blocked():
 
 
 def test_monitoring():
-    """Prometheus voit toutes les sondes en succès (ignoré si absent)."""
+    """Prometheus confirme les trois sondes DNS, HTTP et HTTPS."""
     present, _ = run(["docker", "inspect", "prometheus"], timeout=5)
     if present != 0:
         return None, "supervision non déployée"
@@ -112,18 +118,35 @@ def test_monitoring():
             return False, f"API Prometheus en erreur : {data}"
 
         results = data.get("data", {}).get("result", [])
-        values = [item["value"][1] for item in results]
+        probe_values = {}
 
-        if values and all(value == "1" for value in values):
-            return True, f"{len(values)} sondes OK"
+        for item in results:
+            metric = item.get("metric", {})
+            job = metric.get("job")
+            value = item.get("value", [])
 
-        if values:
-            failed = sum(value != "1" for value in values)
-            last_detail = f"{failed}/{len(values)} sonde(s) en échec"
+            if job in EXPECTED_PROBES and len(value) > 1:
+                probe_values[job] = value[1]
 
+        missing = EXPECTED_PROBES - probe_values.keys()
+        failed = {
+            job for job in EXPECTED_PROBES
+            if job in probe_values and probe_values[job] != "1"
+        }
+
+        if not missing and not failed:
+            return True, f"{len(EXPECTED_PROBES)} sondes Blackbox OK"
+
+        details = []
+        if missing:
+            details.append(f"sondes absentes: {', '.join(sorted(missing))}")
+        if failed:
+            details.append(f"sondes en échec: {', '.join(sorted(failed))}")
+
+        last_detail = "; ".join(details)
         time.sleep(5)
 
-    return False, f"des sondes sont en échec ({last_detail})"
+    return False, f"supervision incomplète ({last_detail})"
 
 
 TESTS = [
