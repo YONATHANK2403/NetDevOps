@@ -91,6 +91,30 @@ def test_lan_to_mgmt_blocked():
     return ctrl == 0 and code != 0, "bloqué" if code != 0 else "NON bloqué"
 
 
+def parse_probe_values(response):
+    """Extrait les valeurs des trois sondes attendues depuis la réponse JSON."""
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        return None, "réponse Prometheus JSON invalide"
+
+    if data.get("status") != "success":
+        return None, f"API Prometheus en erreur : {data}"
+
+    results = data.get("data", {}).get("result", [])
+    probe_values = {}
+
+    for item in results:
+        metric = item.get("metric", {})
+        job = metric.get("job")
+        value = item.get("value", [])
+
+        if job in EXPECTED_PROBES and len(value) > 1:
+            probe_values[job] = value[1]
+
+    return probe_values, None
+
+
 def test_monitoring():
     """Prometheus confirme les trois sondes DNS, HTTP et HTTPS."""
     present, _ = run(["docker", "inspect", "prometheus"], timeout=5)
@@ -109,24 +133,9 @@ def test_monitoring():
         if code != 0:
             return False, f"API Prometheus inaccessible : {out}"
 
-        try:
-            data = json.loads(out)
-        except json.JSONDecodeError:
-            return False, "réponse Prometheus JSON invalide"
-
-        if data.get("status") != "success":
-            return False, f"API Prometheus en erreur : {data}"
-
-        results = data.get("data", {}).get("result", [])
-        probe_values = {}
-
-        for item in results:
-            metric = item.get("metric", {})
-            job = metric.get("job")
-            value = item.get("value", [])
-
-            if job in EXPECTED_PROBES and len(value) > 1:
-                probe_values[job] = value[1]
+        probe_values, error = parse_probe_values(out)
+        if error:
+            return False, error
 
         missing = EXPECTED_PROBES - probe_values.keys()
         failed = {
