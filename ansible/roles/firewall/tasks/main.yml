@@ -1,7 +1,13 @@
 ---
+- name: Créer le dossier de configuration nftables
+  ansible.builtin.file:
+    path: "{{ firewall_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
 - name: Générer les règles nftables du routeur
   ansible.builtin.template:
     src: nftables.conf.j2
-    dest: "{{ project_dir }}/docker/router-fw/nftables.conf"
+    dest: "{{ firewall_config_path }}"
     mode: "0644"
   notify: Recharger la configuration des services

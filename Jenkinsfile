@@ -13,8 +13,7 @@ pipeline {
     }
 
     environment {
-        COMPOSE = 'docker compose -f docker-compose.yml -f docker-compose.monitoring.yml'
-        IMAGES  = 'netdevops/router-fw:latest netdevops/web-dmz:latest netdevops/dns-lan:latest netdevops/client:latest'
+        IMAGES = 'netdevops/router-fw:latest netdevops/web-dmz:latest netdevops/dns-lan:latest netdevops/client:latest netdevops/router-fw:test netdevops/web-dmz:test netdevops/dns-lan:test netdevops/client:test'
     }
 
     stages {
@@ -57,7 +56,18 @@ pipeline {
 
         stage('Build Docker') {
             steps {
-                sh 'docker compose build'
+                sh '''
+                    set -e
+                    echo "===== BUILD IMAGES PRODUCTION ====="
+                    docker compose build
+
+                    echo "===== BUILD IMAGES TEST ====="
+                    GRAFANA_ADMIN_PASSWORD=build-placeholder docker compose \
+                        -p netdevops-test \
+                        -f docker-compose.test.yml \
+                        -f docker-compose.test.monitoring.yml \
+                        --env-file /dev/null build
+                '''
             }
         }
 
@@ -73,24 +83,40 @@ pipeline {
             }
         }
 
-        stage('Déploiement test + tests') {
+        stage('Déploiement TEST + tests') {
             steps {
                 withCredentials([file(credentialsId: 'vault-pass', variable: 'VAULT_PASS_FILE')]) {
                     sh '''
                         set -e
+                        echo "===== DÉPLOIEMENT ENVIRONNEMENT TEST ====="
                         cd ansible
-                        ansible-playbook playbooks/site.yml --vault-password-file "$VAULT_PASS_FILE"
+                        ansible-playbook playbooks/site.yml \
+                            --vault-password-file "$VAULT_PASS_FILE" \
+                            --extra-vars @environments/test.yml
                         cd ..
+
                         mkdir -p reports
                         export NETDEVOPS_TEST_HOST=172.18.0.1
+                        export NETDEVOPS_WEB_IP=172.21.1.10
+                        export NETDEVOPS_DNS_IP=172.21.2.10
+                        export NETDEVOPS_MGMT_IP=172.21.3.10
+                        export NETDEVOPS_ROUTER_CONTAINER=router-fw-test
+                        export NETDEVOPS_WEB_CONTAINER=web-dmz-test
+                        export NETDEVOPS_CLIENT_CONTAINER=client-1-test
+                        export NETDEVOPS_PROMETHEUS_CONTAINER=prometheus-test
+                        export NETDEVOPS_HTTP_PORT=18080
+                        export NETDEVOPS_HTTPS_PORT=18443
+                        export NETDEVOPS_PROMETHEUS_PORT=9090
+                        export NETDEVOPS_DOMAIN=pme.local
 
-                        if python3 scripts/check_stack.py > reports/tests-connectivite.txt 2>&1; then
+                        echo "===== TESTS DE CONNECTIVITÉ TEST ====="
+                        if python3 scripts/check_stack.py > reports/tests-connectivite-test.txt 2>&1; then
                             test_status=0
                         else
                             test_status=$?
                         fi
 
-                        cat reports/tests-connectivite.txt
+                        cat reports/tests-connectivite-test.txt
                         exit "$test_status"
                     '''
                 }
@@ -100,7 +126,7 @@ pipeline {
         stage('Déploiement prod') {
             when { branch 'main' }
             steps {
-                input message: 'Tous les tests sont passés. Déployer en production ?'
+                input message: 'Tous les tests de TEST sont passés. Autoriser le déploiement en PRODUCTION ?'
                 withCredentials([file(credentialsId: 'vault-pass', variable: 'VAULT_PASS_FILE')]) {
                     sh 'cd ansible && ansible-playbook playbooks/site.yml --vault-password-file "$VAULT_PASS_FILE"'
                 }

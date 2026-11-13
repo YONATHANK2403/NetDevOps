@@ -16,3 +16,16 @@ web_ip: 172.20.1.10
 dns_ip: 172.20.2.10
 monitoring_ip: 172.20.3.10
 dns_upstreams: [1.1.1.1, 9.9.9.9]
+
+# Chemins de configuration : valeurs par défaut pour la production
+environment_name: prod
+firewall_config_path: "{{ project_dir }}/docker/router-fw/nftables.conf"
+dns_config_path: "{{ project_dir }}/docker/dns-lan/dnsmasq.conf"
+web_config_dir: "{{ project_dir }}/docker/web-dmz/conf"
+web_html_dir: "{{ project_dir }}/docker/web-dmz/html"
+web_certs_dir: "{{ project_dir }}/docker/web-dmz/certs"
+nginx_config_path: "{{ web_config_dir }}/default.conf"
+web_index_path: "{{ web_html_dir }}/index.html"
+web_certificate_path: "{{ web_certs_dir }}/selfsigned.crt"
+web_private_key_path: "{{ web_certs_dir }}/selfsigned.key"
+env_file_path: "{{ project_dir }}/.env"

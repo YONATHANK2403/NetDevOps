@@ -1,0 +1,81 @@
+---
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus-test
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "127.0.0.1:19090:9090"
+    volumes:
+      - ./docker/monitoring/prometheus.test.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-test-data:/prometheus
+    networks:
+      mgmt-net:
+        ipv4_address: 172.21.3.10
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana-test
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?définir GRAFANA_ADMIN_PASSWORD dans .env.test}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:13000:3000"
+    volumes:
+      - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-test-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      mgmt-net:
+        ipv4_address: 172.21.3.11
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter-test
+    restart: unless-stopped
+    command: ["--path.rootfs=/host"]
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      mgmt-net:
+        ipv4_address: 172.21.3.30
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: blackbox-exporter-test
+    restart: unless-stopped
+    user: root
+    cap_add: [NET_ADMIN]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - sh /set-routes.sh && exec /bin/blackbox_exporter --config.file=/etc/blackbox/blackbox.yml
+    environment:
+      GW: 172.21.3.1
+      ROUTES: "172.21.1.0/24 172.21.2.0/24"
+    volumes:
+      - ./docker/common/set-routes.sh:/set-routes.sh:ro
+      - ./docker/monitoring/blackbox.test.yml:/etc/blackbox/blackbox.yml:ro
+    depends_on:
+      - router-fw
+    networks:
+      mgmt-net:
+        ipv4_address: 172.21.3.20
+
+networks:
+  mgmt-net:
+    external: true
+    name: test-mgmt-net
+
+volumes:
+  prometheus-test-data:
+  grafana-test-data:

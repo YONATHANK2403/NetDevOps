@@ -1,0 +1,100 @@
+---
+name: netdevops-test
+
+x-routed: &routed
+  restart: unless-stopped
+  cap_add: [NET_ADMIN]
+
+services:
+  router-fw:
+    build: ./docker/router-fw
+    image: netdevops/router-fw:test
+    container_name: router-fw-test
+    restart: unless-stopped
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SETUID, SETGID]
+    sysctls:
+      - net.ipv4.ip_forward=1
+    ports:
+      - "18080:80"
+      - "18443:443"
+    volumes:
+      - ./docker/test/router-fw/nftables.conf:/etc/nftables.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nft list ruleset | grep -q 'policy drop'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      dmz-net: {ipv4_address: 172.21.1.1}
+      lan-net: {ipv4_address: 172.21.2.1}
+      mgmt-net: {ipv4_address: 172.21.3.1}
+
+  web-dmz:
+    <<: *routed
+    build: ./docker/web-dmz
+    image: netdevops/web-dmz:test
+    container_name: web-dmz-test
+    entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec nginx -g 'daemon off;'"]
+    environment:
+      GW: 172.21.1.1
+      ROUTES: "172.21.2.0/24 172.21.3.0/24"
+    volumes:
+      - ./docker/common/set-routes.sh:/set-routes.sh:ro
+      - ./docker/test/web-dmz/conf/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/test/web-dmz/html:/usr/share/nginx/html:ro
+      - ./docker/test/web-dmz/certs:/etc/nginx/certs:ro
+    depends_on: [router-fw]
+    networks:
+      dmz-net: {ipv4_address: 172.21.1.10}
+
+  dns-lan:
+    <<: *routed
+    build: ./docker/dns-lan
+    image: netdevops/dns-lan:test
+    container_name: dns-lan-test
+    entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec dnsmasq -k -C /etc/dnsmasq.conf --log-facility=-"]
+    environment:
+      GW: 172.21.2.1
+      ROUTES: "172.21.1.0/24 172.21.3.0/24"
+    volumes:
+      - ./docker/common/set-routes.sh:/set-routes.sh:ro
+      - ./docker/test/dns-lan/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    depends_on: [router-fw]
+    networks:
+      lan-net: {ipv4_address: 172.21.2.10}
+
+  client-1: &client
+    <<: *routed
+    build: ./docker/client
+    image: netdevops/client:test
+    container_name: client-1-test
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c", "sh /set-routes.sh && exec su -s /bin/sh -c 'exec sleep infinity' nobody"]
+    environment:
+      GW: 172.21.2.1
+      ROUTES: "172.21.1.0/24 172.21.3.0/24"
+    dns: [172.21.2.10]
+    volumes:
+      - ./docker/common/set-routes.sh:/set-routes.sh:ro
+    depends_on: [router-fw, dns-lan]
+    networks:
+      lan-net: {ipv4_address: 172.21.2.100}
+
+  client-2:
+    <<: *client
+    container_name: client-2-test
+    networks:
+      lan-net: {ipv4_address: 172.21.2.101}
+
+networks:
+  dmz-net:
+    external: true
+    name: test-dmz-net
+  lan-net:
+    external: true
+    name: test-lan-net
+  mgmt-net:
+    external: true
+    name: test-mgmt-net

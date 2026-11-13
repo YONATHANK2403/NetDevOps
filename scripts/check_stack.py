@@ -8,16 +8,29 @@ import sys
 import time
 import urllib.request
 
-WEB_IP = "172.20.1.10"
-DNS_IP = "172.20.2.10"
-MGMT_IP = "172.20.3.10"
+# Paramètres d'environnement : valeurs par défaut conservées pour PROD.
+WEB_IP = os.environ.get("NETDEVOPS_WEB_IP", "172.20.1.10")
+DNS_IP = os.environ.get("NETDEVOPS_DNS_IP", "172.20.2.10")
+MGMT_IP = os.environ.get("NETDEVOPS_MGMT_IP", "172.20.3.10")
+
+DOMAIN = os.environ.get("NETDEVOPS_DOMAIN", "pme.local")
+WEB_FQDN = f"web.{DOMAIN}"
+
+ROUTER_CONTAINER = os.environ.get("NETDEVOPS_ROUTER_CONTAINER", "router-fw")
+WEB_CONTAINER = os.environ.get("NETDEVOPS_WEB_CONTAINER", "web-dmz")
+CLIENT_CONTAINER = os.environ.get("NETDEVOPS_CLIENT_CONTAINER", "client-1")
+PROMETHEUS_CONTAINER = os.environ.get("NETDEVOPS_PROMETHEUS_CONTAINER", "prometheus")
+
+HTTP_PORT = os.environ.get("NETDEVOPS_HTTP_PORT", "8080")
+HTTPS_PORT = os.environ.get("NETDEVOPS_HTTPS_PORT", "8443")
+MGMT_PORT = os.environ.get("NETDEVOPS_PROMETHEUS_PORT", "9090")
+DNAT_HOST = os.environ.get("NETDEVOPS_TEST_HOST", "127.0.0.1")
 
 EXPECTED_PROBES = {
     "blackbox-dns",
     "blackbox-http",
     "blackbox-https",
 }
-DNAT_HOST = os.environ.get("NETDEVOPS_TEST_HOST", "127.0.0.1")
 
 
 def run(cmd, timeout=15):
@@ -48,46 +61,46 @@ def http_status(url):
 
 def test_firewall_loaded():
     """Les règles nftables sont chargées avec une politique par défaut 'drop'."""
-    code, out = docker_exec("router-fw", "nft list ruleset")
+    code, out = docker_exec(ROUTER_CONTAINER, "nft list ruleset")
     return code == 0 and "policy drop" in out, "policy drop présente" if code == 0 else out
 
 
 def test_dnat_http():
-    """Internet -> router-fw:8080 -> web-dmz (DNAT HTTP)."""
-    status = http_status(f"http://{DNAT_HOST}:8080/")
+    """Accès HTTP externe via le port DNAT configuré."""
+    status = http_status(f"http://{DNAT_HOST}:{HTTP_PORT}/")
     return status == 200, f"HTTP {status}"
 
 
 def test_dnat_https():
-    """Internet -> router-fw:8443 -> web-dmz (DNAT HTTPS)."""
-    status = http_status(f"https://{DNAT_HOST}:8443/")
+    """Accès HTTPS externe via le port DNAT configuré."""
+    status = http_status(f"https://{DNAT_HOST}:{HTTPS_PORT}/")
     return status == 200, f"HTTPS {status}"
 
 
 def test_dns_resolution():
-    """Le DNS du LAN résout web.pme.local vers l'IP du serveur web."""
-    code, out = docker_exec("client-1", f"dig +short +time=2 +tries=1 @{DNS_IP} web.pme.local")
+    """Le DNS du LAN résout le nom Web configuré vers son adresse IP."""
+    code, out = docker_exec(CLIENT_CONTAINER, f"dig +short +time=2 +tries=1 @{DNS_IP} {WEB_FQDN}")
     return code == 0 and out == WEB_IP, out or "pas de réponse"
 
 
 def test_lan_to_web():
     """Un poste LAN atteint le site web par son nom (DNS + routage + pare-feu)."""
-    cmd = "curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://web.pme.local/"
-    code, out = docker_exec("client-1", cmd, 10)
+    cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 5 http://{WEB_FQDN}/"
+    code, out = docker_exec(CLIENT_CONTAINER, cmd, 10)
     return code == 0 and out == "200", f"HTTP {out}"
 
 
 def test_dmz_to_lan_blocked():
     """La DMZ ne peut pas ouvrir de connexion vers le LAN."""
-    ctrl, _ = docker_exec("web-dmz", "nc -w 2 127.0.0.1 80 </dev/null")
-    code, _ = docker_exec("web-dmz", f"nc -w 2 {DNS_IP} 53 </dev/null", 10)
+    ctrl, _ = docker_exec(WEB_CONTAINER, "nc -w 2 127.0.0.1 80 </dev/null")
+    code, _ = docker_exec(WEB_CONTAINER, f"nc -w 2 {DNS_IP} 53 </dev/null", 10)
     return ctrl == 0 and code != 0, "bloqué" if code != 0 else "NON bloqué"
 
 
 def test_lan_to_mgmt_blocked():
     """Le LAN ne peut pas atteindre la zone Management."""
-    ctrl, _ = docker_exec("client-1", f"nc -z -w 2 {DNS_IP} 53")
-    code, _ = docker_exec("client-1", f"nc -z -w 2 {MGMT_IP} 9090", 10)
+    ctrl, _ = docker_exec(CLIENT_CONTAINER, f"nc -z -w 2 {DNS_IP} 53")
+    code, _ = docker_exec(CLIENT_CONTAINER, f"nc -z -w 2 {MGMT_IP} {MGMT_PORT}", 10)
     return ctrl == 0 and code != 0, "bloqué" if code != 0 else "NON bloqué"
 
 
@@ -117,7 +130,7 @@ def parse_probe_values(response):
 
 def test_monitoring():
     """Prometheus confirme les trois sondes DNS, HTTP et HTTPS."""
-    present, _ = run(["docker", "inspect", "prometheus"], timeout=5)
+    present, _ = run(["docker", "inspect", PROMETHEUS_CONTAINER], timeout=5)
     if present != 0:
         return None, "supervision non déployée"
 
@@ -129,7 +142,7 @@ def test_monitoring():
     last_detail = "aucune sonde disponible"
 
     while time.time() < deadline:
-        code, out = docker_exec("prometheus", query, 10)
+        code, out = docker_exec(PROMETHEUS_CONTAINER, query, 10)
         if code != 0:
             return False, f"API Prometheus inaccessible : {out}"
 

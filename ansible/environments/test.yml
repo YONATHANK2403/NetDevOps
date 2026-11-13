@@ -1,0 +1,44 @@
+---
+# Environnement TEST isolé de la production
+environment_name: test
+site_title: "PME NetDevOps - TEST"
+
+# Projet Docker Compose indépendant
+compose_cmd: >-
+  docker compose
+  -p netdevops-test
+  -f docker-compose.test.yml
+  -f docker-compose.test.monitoring.yml
+  --env-file .env.test
+
+# Réseaux TEST
+dmz_net: 172.21.1.0/24
+lan_net: 172.21.2.0/24
+mgmt_net: 172.21.3.0/24
+
+# Adresses des équipements TEST
+router_dmz_ip: 172.21.1.1
+router_lan_ip: 172.21.2.1
+router_mgmt_ip: 172.21.3.1
+web_ip: 172.21.1.10
+dns_ip: 172.21.2.10
+monitoring_ip: 172.21.3.10
+
+dns_upstreams:
+  - 1.1.1.1
+  - 9.9.9.9
+
+# Fichiers de configuration TEST
+firewall_config_path: "{{ project_dir }}/docker/test/router-fw/nftables.conf"
+dns_config_path: "{{ project_dir }}/docker/test/dns-lan/dnsmasq.conf"
+web_config_dir: "{{ project_dir }}/docker/test/web-dmz/conf"
+web_html_dir: "{{ project_dir }}/docker/test/web-dmz/html"
+web_certs_dir: "{{ project_dir }}/docker/test/web-dmz/certs"
+
+nginx_config_path: "{{ web_config_dir }}/default.conf"
+web_index_path: "{{ web_html_dir }}/index.html"
+web_certificate_path: "{{ web_certs_dir }}/selfsigned.crt"
+web_private_key_path: "{{ web_certs_dir }}/selfsigned.key"
+
+# Secrets TEST séparés de ceux de PROD
+env_file_path: "{{ project_dir }}/.env.test"

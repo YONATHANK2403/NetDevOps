@@ -1,7 +1,13 @@
 ---
+- name: Créer le dossier de configuration DNS
+  ansible.builtin.file:
+    path: "{{ dns_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+
 - name: Générer la configuration dnsmasq
   ansible.builtin.template:
     src: dnsmasq.conf.j2
-    dest: "{{ project_dir }}/docker/dns-lan/dnsmasq.conf"
+    dest: "{{ dns_config_path }}"
     mode: "0644"
   notify: Recharger la configuration des services

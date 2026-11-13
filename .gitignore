@@ -13,3 +13,7 @@ docker/web-dmz/certs/selfsigned.key
 .coverage
 coverage.xml
 htmlcov/
+
+# Secrets et certificats de l'environnement TEST
+.env.test
+docker/test/web-dmz/certs/
