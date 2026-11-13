@@ -8,3 +8,8 @@ reports/*
 __pycache__/
 *.retry
 docker/web-dmz/certs/selfsigned.key
+
+# Rapports temporaires de couverture
+.coverage
+coverage.xml
+htmlcov/

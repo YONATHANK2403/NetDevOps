@@ -17,7 +17,8 @@ RUN set -eux; \
       ansible-core \
       ansible-lint \
       yamllint \
-      pylint; \
+      pylint \
+      coverage==7.17.3; \
     rm -rf /var/lib/apt/lists/*
 
 # Docker CLI et plugin Compose

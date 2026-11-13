@@ -38,7 +38,19 @@ pipeline {
         stage('SonarQube') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh 'sonar-scanner -Dsonar.host.url=http://sonarqube:9000 -Dsonar.token=$SONAR_TOKEN'
+                    sh '''
+                        set -e
+
+                        echo "===== TESTS UNITAIRES ====="
+                        python3 -m coverage run --branch --source=scripts.check_stack -m unittest discover -s tests -v
+
+                        echo "===== RAPPORT DE COUVERTURE ====="
+                        python3 -m coverage report -m
+                        python3 -m coverage xml -o coverage.xml
+
+                        echo "===== ANALYSE SONARQUBE ====="
+                        sonar-scanner -Dsonar.host.url=http://sonarqube:9000 -Dsonar.token="$SONAR_TOKEN"
+                    '''
                 }
             }
         }
